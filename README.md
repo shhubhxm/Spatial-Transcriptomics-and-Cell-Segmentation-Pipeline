@@ -1,93 +1,209 @@
-# ENACT+: Enhanced Spatial Transcriptomics and Cell Segmentation Pipeline
+# ENACT: Spatial Transcriptomics and Cell Segmentation Pipeline
 
-This project builds upon [Sanofi's ENACT pipeline](https://github.com/Sanofi-Public/enact-pipeline) to develop an advanced and extensible system for spatial transcriptomics analysis using Visium HD data.
+Spatial transcriptomics (ST) enables researchers to study gene expression while preserving spatial context within tissue samples. A significant challenge has been the resolution limitations of sequencing-based ST platforms. With the advent of Visium High Definition (HD) technology, we can now analyze transcript data at near single-cell resolution.
 
-## 🧠 What I Built on Top of ENACT
+**ENACT** is an end-to-end spatial transcriptomics analysis pipeline that integrates advanced cell segmentation with Visium HD data to infer transcript-level cell types across whole tissue sections. The pipeline is designed to be tissue-agnostic, modular, and highly scalable — making it suitable for use across a range of biomedical research applications.
 
-While the core functionality of ENACT provides a robust framework, I extended and customized the pipeline in the following ways:
-
-- **Modular Enhancements**: Refactored parts of the pipeline to allow easier experimentation with alternative cell annotation tools (e.g., switching between `CellTypist`, `CellAssign`, and `Sargent`).
-- **Visualization Improvements**: Created Jupyter notebooks and Python scripts for downstream analysis and enhanced visual summaries of segmentation results.
-- **Custom YAML Configs**: Designed organ/tissue-specific configuration files for different sample types beyond colorectal cancer.
-- **Pipeline Optimization**: Tuned pipeline parameters (e.g., patch size, tile overlap, HVG count) for performance on limited-memory machines.
-- **Experimental Feature Hooks**: Added modular flags in the pipeline for toggling specific enhancements like destripe normalization and extended nucleus expansion.
+![plot](figs/pipelineflow.png)
 
 ---
 
-## 🧬 Overview
+## What ENACT Does
 
-ENACT+ integrates high-resolution cell segmentation with spatial transcriptomics data from Visium HD to infer single-cell gene expression and cell type identities. It is tissue-agnostic and supports multiple cell-type annotation methods.
+- **Segments high-resolution tissue images** using neural network-based models (e.g., Stardist)
+- **Aggregates VisiumHD bin-level transcripts** to form cell-specific expression profiles
+- **Assigns cell types** using probabilistic and ML-based methods like `CellTypist`, `CellAssign`, or custom marker databases
+- **Visualizes results interactively** with integrated support for TissUUmaps
 
-**Key Steps:**
-1. **Cell segmentation** using deep learning models (e.g., Stardist).
-2. **Bin-to-cell assignment** of Visium HD transcript data.
-3. **Cell type inference** using marker-based tools or probabilistic models.
-4. **Visualization and downstream analysis** via custom notebooks and interactive tools like TissUUmaps.
-
----
-
-## 🚀 Getting Started
-
-This repository retains the original ENACT structure. Please refer to the [original README](https://github.com/Sanofi-Public/enact-pipeline) for full documentation, including:
-
-- System Requirements
-- Installation (Conda / Pip)
-- Input/Output file structure
-- Full configuration options
-- Running Instructions
+This version of ENACT introduces enhancements that improve usability, performance, and downstream analytical flexibility, tailored to specific tissue types and experimental designs.
 
 ---
 
-## 🔧 Custom Config Example
+## Key Enhancements in This Version
 
-Here is a sample of a modified YAML config I created:
+- Reconfigured YAML-based interface for flexible tissue-specific runs  
+- Streamlined support for alternate segmentation methods and cell typing tools  
+- Optimized memory usage for chunk-wise processing of large WSIs  
+- Developed rich visual analysis notebooks for downstream interpretation  
+- Enabled destriping and normalization flags for finer control in preprocessing  
+
+---
+
+## Index
+
+1. [Installation](#installation)
+2. [Input & Output Structure](#input--output-structure)
+3. [Configuration](#configuration)
+4. [Running the Pipeline](#running-the-pipeline)
+5. [Working With Results](#working-with-results)
+6. [Visualization on TissUUmaps](#visualization-on-tissuumaps)
+7. [Reproducing Results](#reproducing-results)
+8. [Synthetic Data Support](#synthetic-data-support)
+9. [Citation](#citation)
+
+---
+
+## Installation
+
+ENACT requires Python 3.10 and optionally a CUDA-compatible GPU. Recommended system specs:
+
+- **32-core CPU**, **64GB RAM**, **100GB disk** (for full-resolution slides)
+- **Python**: 3.10  
+- **Optional**: GPU w/ CUDA 11+
+
+### Option 1: From Source
+
+```bash
+git clone https://github.com/<your-username>/enact-pipeline.git
+cd enact-pipeline
+make setup_py_env
+```
+
+Update the `Makefile` to point to your conda env location.
+
+### Option 2: From PyPI
+
+```bash
+pip install enact-SO
+```
+
+---
+
+## Input & Output Structure
+
+### Required Inputs
+
+- `tissue_image.btf`: High-resolution whole slide image
+- `tissue_positions.parquet`: Bin positions from SpaceRanger
+- `filtered_feature_bc_matrix.h5`: 2um-resolution gene-bin matrix from VisiumHD
+
+### Output Directory
+
+ENACT automatically stores all outputs under a `cache/` folder, organized by analysis name. Outputs include:
+
+```
+cache/
+└── <analysis_name>/
+    ├── chunks/
+    │   ├── bins_gdf/
+    │   ├── cells_gdf/
+    │   └── results/
+    ├── tmap/
+    └── cells_df.csv
+```
+
+---
+
+## Configuration
+
+You can configure ENACT in two ways:
+
+### Option 1: Python Class Interface
+
+```python
+from enact.pipeline import ENACT
+
+run = ENACT(
+    cache_dir="cache/",
+    wsi_path="sample_image.btf",
+    visiumhd_h5_path="filtered_feature_bc_matrix.h5",
+    tissue_positions_path="tissue_positions.parquet",
+    cell_annotation_method="celltypist"
+)
+```
+
+### Option 2: YAML File
 
 ```yaml
-analysis_name: colon_custom_run
-seg_method: "stardist"
-bin_to_cell_method: "weighted_by_area"
-cell_annotation_method: "cellassign"
-use_hvg: True
-n_hvg: 1500
-patch_size: 3000
-destripe_norm: True
-expand_by_nbins: 3
-cell_markers:
-  Fibroblast: ["COL1A1", "COL3A1"]
-  T_cells: ["CD3D", "CD3E"]
+analysis_name: colon_sample_run
+cache_dir: ./cache
+paths:
+  wsi_path: path/to/image.btf
+  visiumhd_h5_path: path/to/h5
+  tissue_positions_path: path/to/positions.parquet
+params:
+  bin_to_cell_method: weighted_by_cluster
+  cell_annotation_method: cellassign
+  use_hvg: true
+  n_hvg: 1000
 ```
 
 ---
 
-## 📊 Custom Visualizations
+## Running the Pipeline
 
-I created a new output analysis notebook:
-- `/notebooks/custom_output_analysis.ipynb`  
-  Includes:
-  - Top expressed genes per region
-  - Cell type spatial clustering
-  - Expression heatmaps
-  - Transcript density overlay on H&E image
+You can run the pipeline using `make` or Python scripts:
 
----
-
-## 💡 Future Work
-
-Planned additions:
-- Integration with newer models like SAM for segmentation.
-- Dockerization for easier deployment.
-- Performance benchmarking on other tissue datasets.
-
----
-
-## 📜 Citation
-
-If you use the base ENACT pipeline, cite:
-
-```
-Kamel, Mena, et al. "ENACT: End-to-end Analysis of Visium High Definition (HD) Data." Bioinformatics, 2025.
+```bash
+make run_enact
 ```
 
+Or run steps manually from your notebook/script using the ENACT class.
+
 ---
 
-Let me know if you'd like me to generate this in a `README.md` file or adapt it to your GitHub profile. Would you like help customizing the output analysis notebook section too?
+## 📊 Working With Results
+
+A Jupyter notebook is provided to analyze the output:
+
+- Load `cells_adata.csv` for cell coordinates and annotations
+- Visualize top expressed genes
+- Compute spatial clustering metrics
+- Generate region-specific plots
+
+---
+
+## 🧭 Visualization on TissUUmaps
+
+ENACT generates a `.tmap` project file for visualizing spatial results. To view:
+
+1. Install [TissUUmaps](https://tissuumaps.github.io/)
+2. Load the file from `cache/tmap/`
+3. Explore spatial cell typing and transcript patterns interactively
+
+![plot](figs/tissuumaps.png)
+
+---
+
+## Reproducing Results
+
+To reproduce a benchmark run on 10X Genomics' Human Colorectal dataset:
+
+```bash
+make reproduce_results
+```
+
+This will download all necessary files and execute predefined config combinations (e.g., `weighted_by_area` + `cellassign`).
+
+---
+
+## Synthetic Data Support
+
+You can also run ENACT on synthetic datasets (e.g., from Xenium or seqFISH+):
+
+```yaml
+run_synthetic: true
+```
+
+Then run:
+
+```bash
+make run_enact
+```
+
+Synthetic data notebooks are available under `/src/synthetic_data`.
+
+---
+
+## Citation
+
+If you use this project or build on it for your own research, please cite:
+
+```
+@article{10.1093/bioinformatics/btaf094,
+  title={ENACT: End-to-end Analysis of Visium High Definition (HD) Data},
+  journal={Bioinformatics},
+  year={2025},
+  doi={10.1093/bioinformatics/btaf094}
+}
+```
