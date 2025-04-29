@@ -1,5 +1,3 @@
-Here’s a refined version of your README that makes it clear you're building upon the original ENACT pipeline while showcasing your own contributions. This version retains all the technical details but repositions the project as your extended/customized version:
-
 # ENACT+: Enhanced Spatial Transcriptomics and Cell Segmentation Pipeline
 
 This project builds upon [Sanofi's ENACT pipeline](https://github.com/Sanofi-Public/enact-pipeline) to develop an advanced and extensible system for spatial transcriptomics analysis using Visium HD data.
